@@ -12,6 +12,9 @@ document.addEventListener("DOMContentLoaded", function() {
   const TRAIL_DAMPING    = 0.35;  // trail damps slightly more than follower
   const TRAIL_DELAY      = 2;     // trail lags this many frames more than the follower
 
+  const VELOCITY_MAX    = 0;    // px/frame spring speed that maps to full expansion
+  const VELOCITY_EXPAND = 0;    // extra pixels added to radius at peak speed
+
   // ═══════════════════════════════════════════════════════════════
   // 2. COLORS
   // ═══════════════════════════════════════════════════════════════
@@ -39,6 +42,16 @@ document.addEventListener("DOMContentLoaded", function() {
 
   const BASE_RADIUS  = 1200;   // base gradient radius in pixels (scale multiplies this)
   const SHOW_TRAIL   = true;  // set false to disable the trail
+
+  // ═══════════════════════════════════════════════════════════════
+  // 3b. BREATHING
+  // ═══════════════════════════════════════════════════════════════
+
+  const BREATHE_ENABLED = false;   // toggle the pulse on/off
+  const BREATHE_PERIOD  = 3;      // seconds per full inhale → exhale cycle
+  const BREATHE_SCALE   = 0.1;   // ± added to scale at peak (gentle size swell)
+  const BREATHE_OPACITY = 0;   // ± added to opacity at peak
+  const BREATHE_PHASE   = 0.5;    // radians — offsets trail vs follower for organic feel
 
   // ═══════════════════════════════════════════════════════════════
   // 4. PRESETS
@@ -162,15 +175,7 @@ document.addEventListener("DOMContentLoaded", function() {
     canvas.height = window.innerHeight * dpr;
   }
   resizeCanvas();
-
-  var resizeTimer = null;
-  window.addEventListener("resize", function() {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(function() {
-      resizeCanvas();
-      updateCenteredRect();
-    }, 150);
-  });
+  window.addEventListener("resize", resizeCanvas);
 
   // ── Live state objects (tweened by GSAP, read by draw) ───────
 
@@ -183,9 +188,10 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // ── Draw ─────────────────────────────────────────────────────
 
-  function drawGradient(x, y, live) {
-    var radius = BASE_RADIUS * live.scale;
-    var alpha  = live.opacity;
+  function drawGradient(x, y, live, extraRadius, breath) {
+    var b0     = breath || 0;
+    var radius = BASE_RADIUS * (live.scale + b0 * BREATHE_SCALE) + (extraRadius || 0);
+    var alpha  = Math.max(0, Math.min(1, live.opacity + b0 * BREATHE_OPACITY));
     if (radius <= 0 || alpha <= 0) return;
 
     var r = Math.round(live.r);
@@ -246,23 +252,19 @@ document.addEventListener("DOMContentLoaded", function() {
 
   var movementLocked    = false;
   var centeredTriggerEl = null;
-  var centeredRect      = null;
   var fVelX = 0, fVelY = 0;
   var tVelX = 0, tVelY = 0;
 
-  function updateCenteredRect() {
-    if (!centeredTriggerEl) return;
-    var rect = centeredTriggerEl.getBoundingClientRect();
-    centeredRect = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-  }
-  window.addEventListener("scroll", updateCenteredRect, { passive: true });
-
   gsap.ticker.add(function() {
 
+    var fExpand = 0;
+    var tExpand = 0;
+
     if (movementLocked) {
-      if (centeredRect) {
-        fPos.x = centeredRect.x;
-        fPos.y = centeredRect.y;
+      if (centeredTriggerEl) {
+        var rect = centeredTriggerEl.getBoundingClientRect();
+        fPos.x = rect.left + rect.width  / 2;
+        fPos.y = rect.top  + rect.height / 2;
         tPos.x = fPos.x;
         tPos.y = fPos.y;
       }
@@ -278,6 +280,8 @@ document.addEventListener("DOMContentLoaded", function() {
       fVelY = (fVelY + dy * SPRING_STIFFNESS) * SPRING_DAMPING;
       fPos.x += fVelX;
       fPos.y += fVelY;
+      var fInstant = Math.sqrt(fVelX * fVelX + fVelY * fVelY);
+      fExpand  = (Math.min(fInstant, VELOCITY_MAX) / VELOCITY_MAX) * VELOCITY_EXPAND;
 
       tBuf[tHead].x = mouse.x;
       tBuf[tHead].y = mouse.y;
@@ -290,13 +294,22 @@ document.addEventListener("DOMContentLoaded", function() {
       tVelY = (tVelY + dy * TRAIL_STIFFNESS) * TRAIL_DAMPING;
       tPos.x += tVelX;
       tPos.y += tVelY;
+      var tInstant = Math.sqrt(tVelX * tVelX + tVelY * tVelY);
+      tExpand  = (Math.min(tInstant, VELOCITY_MAX) / VELOCITY_MAX) * VELOCITY_EXPAND;
+    }
+
+    var fBreath = 0, tBreath = 0;
+    if (BREATHE_ENABLED) {
+      var bAngle = (gsap.ticker.time / BREATHE_PERIOD) * Math.PI * 2;
+      fBreath = Math.sin(bAngle);
+      tBreath = Math.sin(bAngle + BREATHE_PHASE);
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.scale(dpr, dpr);
-    if (SHOW_TRAIL && tLive.opacity > 0.001) drawGradient(tPos.x, tPos.y, tLive);
-    if (fLive.opacity > 0.001) drawGradient(fPos.x, fPos.y, fLive);
+    if (SHOW_TRAIL) drawGradient(tPos.x, tPos.y, tLive, tExpand, tBreath);
+    drawGradient(fPos.x, fPos.y, fLive, fExpand, fBreath);
     ctx.restore();
   });
 
@@ -328,7 +341,7 @@ document.addEventListener("DOMContentLoaded", function() {
             duration:  (state.transition && state.transition.duration) || 0.6,
             ease:      (state.transition && state.transition.ease) || "power3.inOut",
             overwrite: "auto",
-            onComplete: function() { centeredTriggerEl = trigger; updateCenteredRect(); },
+            onComplete: function() { centeredTriggerEl = trigger; },
           });
           gsap.to(tPos, {
             x: cx, y: cy,
@@ -355,7 +368,6 @@ document.addEventListener("DOMContentLoaded", function() {
           gsap.killTweensOf(fPos);
           gsap.killTweensOf(tPos);
           centeredTriggerEl = null;
-          centeredRect = null;
           fVelX = 0; fVelY = 0;
           tVelX = 0; tVelY = 0;
           for (var i = 0; i < fBufLen; i++) { fBuf[i].x = mouse.x; fBuf[i].y = mouse.y; }
