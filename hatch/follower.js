@@ -87,7 +87,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
   const DEFAULT_STATE  = "default";
   const DEFAULT_RETURN = { duration: 1, ease: "back.out(2)" };
-  const FULL_TRANSITION = { duration: 1.2, ease: "power3.inOut" };
+  const FULL_TRANSITION = { duration: 0.6, ease: "power3.inOut" };
 
   // ═══════════════════════════════════════════════════════════════
   // 6. STATE DEFINITIONS
