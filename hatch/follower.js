@@ -74,6 +74,10 @@ document.addEventListener("DOMContentLoaded", function() {
     focusedSecondary:  preset(COLORS.secondary, 0.2, 0.2, 0.5, 0.5, .6),
     centeredPrimary:   preset(COLORS.primary,   0.4, 0.25, 0.55, 0.8, 1),
     centeredSecondary: preset(COLORS.secondary, 0.4, 0.25, 0.55, 1, .5),
+    fullPrimary:       preset(COLORS.primary,   1, 0.85, 0.95, "full", 1),
+    fullSecondary:     preset(COLORS.secondary, 1, 0.85, 0.95, "full", 1),
+    fullAccent:        preset(COLORS.accent,    1, 0.85, 0.95, "full", 1),
+    fullNeutral:       preset(COLORS.neutral,   1, 0.85, 0.95, "full", 1),
   };
 
   // ═══════════════════════════════════════════════════════════════
@@ -125,8 +129,30 @@ document.addEventListener("DOMContentLoaded", function() {
       transition: { duration: 1, ease: "back.out(2)" },
     },
 
-    // ponytail: sentinel — participates in enter/leave stack bookkeeping
-    // but never changes the visual; nested trigger keeps the parent's state.
+    "full-screen-primary": {
+      follower:   PRESETS.fullPrimary,
+      trail:      PRESETS.hidden,
+      transition: { duration: 1.2, ease: "power3.inOut" },
+    },
+
+    "full-screen-secondary": {
+      follower:   PRESETS.fullSecondary,
+      trail:      PRESETS.hidden,
+      transition: { duration: 1.2, ease: "power3.inOut" },
+    },
+
+    "full-screen-accent": {
+      follower:   PRESETS.fullAccent,
+      trail:      PRESETS.hidden,
+      transition: { duration: 1.2, ease: "power3.inOut" },
+    },
+
+    "full-screen-neutral": {
+      follower:   PRESETS.fullNeutral,
+      trail:      PRESETS.hidden,
+      transition: { duration: 1.2, ease: "power3.inOut" },
+    },
+    
     inherit: {}
   };
 
