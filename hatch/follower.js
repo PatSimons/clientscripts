@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded", function() {
     primary:   toRGB("oklch(0.8883 0.0586 205.57)"),
     secondary: toRGB("oklch(0.8375 0.1029 307.72)"),
     accent:    toRGB("oklch(0.9379 0.2146 115.41)"),
-    neutral:   toRGB("oklch(0.9824 0.013 71.33)"),
+    neutral:   toRGB("oklch(0.8181 0.0161 86.44)"),
   };
 
   // ═══════════════════════════════════════════════════════════════
