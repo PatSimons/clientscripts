@@ -85,8 +85,8 @@ document.addEventListener("DOMContentLoaded", function() {
   // 5. DEFAULTS
   // ═══════════════════════════════════════════════════════════════
 
-  const DEFAULT_STATE  = "default";
-  const DEFAULT_RETURN = { duration: 1, ease: "back.out(2)" };
+  const DEFAULT_STATE   = "default";
+  const DEFAULT_RETURN  = { duration: 1, ease: "back.out(2)" };
   const FULL_TRANSITION = { duration: 0.6, ease: "power3.inOut" };
 
   // ═══════════════════════════════════════════════════════════════
@@ -139,7 +139,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     "full-screen-secondary": {
       follower:   PRESETS.fullSecondary,
-      trail:       PRESETS.hidden,
+      trail:      PRESETS.hidden,
       transition: FULL_TRANSITION,
     },
 
@@ -214,8 +214,19 @@ document.addEventListener("DOMContentLoaded", function() {
   var fLive = Object.assign({}, initState.follower, { opacity: 0 });
   var tLive = Object.assign({}, initState.trail || initState.follower, { opacity: 0 });
 
-  gsap.to(fLive, { opacity: initState.follower.opacity,                      duration: 2, ease: "power2.out", delay: 0.7 });
-  gsap.to(tLive, { opacity: (initState.trail || initState.follower).opacity, duration: 2, ease: "power2.out", delay: 0.9 });
+  // Intro fade. Held in a variable so a trigger firing during the delay
+  // can cancel it — a delayed tween is not "active", so overwrite: "auto"
+  // would not catch it, and it would later drag opacity back to default.
+  var introTweens = [
+    gsap.to(fLive, { opacity: initState.follower.opacity,                      duration: 2, ease: "power2.out", delay: 0.7 }),
+    gsap.to(tLive, { opacity: (initState.trail || initState.follower).opacity, duration: 2, ease: "power2.out", delay: 0.9 })
+  ];
+
+  function killIntro() {
+    if (!introTweens) return;
+    introTweens.forEach(function(tw) { tw.kill(); });
+    introTweens = null;
+  }
 
   // ── Draw ─────────────────────────────────────────────────────
 
@@ -272,6 +283,8 @@ document.addEventListener("DOMContentLoaded", function() {
     opts = opts || {};
     var state = STATES[stateName];
     if (!state) { console.warn("Follower: unknown state \"" + stateName + "\""); return; }
+
+    killIntro();
 
     var fDef = resolveDef(state.follower);
     var tDef = resolveDef(state.trail || state.follower);
