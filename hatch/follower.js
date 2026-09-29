@@ -138,8 +138,8 @@ document.addEventListener("DOMContentLoaded", function() {
     },
 
     "full-screen-secondary": {
-      follower:   PRESETS.focusedPrimary,
-      trail:       PRESETS.fullSecondary,
+      follower:   PRESETS.fullSecondary,
+      trail:       PRESETS.hidden,
       transition: FULL_TRANSITION,
     },
 
