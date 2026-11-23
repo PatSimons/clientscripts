@@ -90,7 +90,23 @@ document.addEventListener("DOMContentLoaded", function() {
   const FULL_TRANSITION = { duration: 0.6, ease: "power3.inOut" };
 
   // ═══════════════════════════════════════════════════════════════
-  // 6. STATE DEFINITIONS
+  // 6. AMBIENT MODE (tablet and below)
+  // ═══════════════════════════════════════════════════════════════
+  //
+  //  Below the breakpoint the follower and all hover states are off.
+  //  The blobs drift on a random path that repeats seamlessly every
+  //  AMBIENT_LOOP seconds, and cross-fade between primary and secondary.
+  //  With reduced motion turned on (any screen size) the blobs stay still.
+  //
+  // ═══════════════════════════════════════════════════════════════
+
+  const AMBIENT_QUERY = "(max-width: 991px)";
+  const AMBIENT_LOOP  = 60;    // seconds per seamless loop (higher = slower drift)
+  const AMBIENT_RANGE = 0.25;  // how far it drifts, as a fraction of the viewport
+  const AMBIENT_TRAIL = 8;     // seconds the trail runs behind on the same path
+
+  // ═══════════════════════════════════════════════════════════════
+  // 7. STATE DEFINITIONS
   // ═══════════════════════════════════════════════════════════════
   //
   //  Trigger usage:  data-follower="stateName"
@@ -175,6 +191,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
   var triggers    = document.querySelectorAll("[data-follower]");
   var activeStack = [];
+  var needsDraw   = true;  // forces one redraw when nothing is moving or tweening
 
   // ── Canvas ───────────────────────────────────────────────────
 
@@ -191,6 +208,7 @@ document.addEventListener("DOMContentLoaded", function() {
     dpr = window.devicePixelRatio || 1;
     canvas.width  = window.innerWidth  * dpr;
     canvas.height = window.innerHeight * dpr;
+    needsDraw = true;
   }
   resizeCanvas();
 
@@ -315,6 +333,25 @@ document.addEventListener("DOMContentLoaded", function() {
     mouse.y = e.clientY;
   });
 
+  // ── Ambient loop ──────────────────────────────────────────────
+
+  // Random phases per page load; whole-number harmonics keep the loop seamless.
+  var seed = [0, 0, 0, 0].map(function() { return Math.random() * Math.PI * 2; });
+
+  function ambientPos(t, out) {
+    var a = (t / AMBIENT_LOOP) * Math.PI * 2;
+    var w = window.innerWidth, h = window.innerHeight;
+    out.x = w / 2 + w * AMBIENT_RANGE * (0.6 * Math.sin(a + seed[0]) + 0.4 * Math.sin(2 * a + seed[1]));
+    out.y = h / 2 + h * AMBIENT_RANGE * (0.6 * Math.sin(a + seed[2]) + 0.4 * Math.sin(3 * a + seed[3]));
+  }
+
+  // m = 0 → primary, 1 → secondary
+  function mixColor(live, m) {
+    live.r = COLORS.primary.r + (COLORS.secondary.r - COLORS.primary.r) * m;
+    live.g = COLORS.primary.g + (COLORS.secondary.g - COLORS.primary.g) * m;
+    live.b = COLORS.primary.b + (COLORS.secondary.b - COLORS.primary.b) * m;
+  }
+
   // ── Ticker ────────────────────────────────────────────────────
 
   var movementLocked    = false;
@@ -327,48 +364,121 @@ document.addEventListener("DOMContentLoaded", function() {
     if (!centeredTriggerEl) return;
     var rect = centeredTriggerEl.getBoundingClientRect();
     centeredRect = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    needsDraw = true;
   }
   window.addEventListener("scroll", updateCenteredRect, { passive: true });
 
+  function releaseCentered() {
+    gsap.killTweensOf(fPos);
+    gsap.killTweensOf(tPos);
+    centeredTriggerEl = null;
+    centeredRect = null;
+    fVelX = 0; fVelY = 0;
+    tVelX = 0; tVelY = 0;
+    for (var i = 0; i < fBufLen; i++) { fBuf[i].x = mouse.x; fBuf[i].y = mouse.y; }
+    for (var j = 0; j < tBufLen; j++) { tBuf[j].x = mouse.x; tBuf[j].y = mouse.y; }
+    movementLocked = false;
+  }
+
+  // "follow" (desktop), "ambient" (tablet and below), "static" (reduced motion)
+  var mode = null;
+  var smallMQ  = window.matchMedia(AMBIENT_QUERY);
+  var reduceMQ = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  function setMode() {
+    var next = reduceMQ.matches ? "static" : smallMQ.matches ? "ambient" : "follow";
+    if (next === mode) return;
+    if (mode) {
+      // Switching after load (resize/rotate): drop hover states, back to default look
+      activeStack.length = 0;
+      releaseCentered();
+      transitionTo(DEFAULT_STATE);
+    }
+    mode = next;
+    needsDraw = true;
+  }
+  setMode();
+  smallMQ.addEventListener("change", setMode);
+  reduceMQ.addEventListener("change", setMode);
+
+  function isTweening() {
+    return gsap.isTweening(fLive) || gsap.isTweening(tLive) ||
+           gsap.isTweening(fPos)  || gsap.isTweening(tPos);
+  }
+
+  var frame = 0;
+
   gsap.ticker.add(function() {
 
-    // Recover from a broken position instead of staying stuck on NaN
-    if (!Number.isFinite(fPos.x) || !Number.isFinite(fPos.y)) { fPos.x = mouse.x; fPos.y = mouse.y; fVelX = fVelY = 0; }
-    if (!Number.isFinite(tPos.x) || !Number.isFinite(tPos.y)) { tPos.x = mouse.x; tPos.y = mouse.y; tVelX = tVelY = 0; }
+    if (mode === "ambient") {
+      if (frame++ % 2) return;  // ~30fps is plenty for a slow drift
+      var t = gsap.ticker.time;
+      ambientPos(t, fPos);
+      ambientPos(t - AMBIENT_TRAIL, tPos);
+      var m = 0.5 - 0.5 * Math.cos((t / AMBIENT_LOOP) * Math.PI * 4);  // two colour cycles per loop
+      mixColor(fLive, m);
+      mixColor(tLive, 1 - m);
 
-    if (movementLocked) {
-      if (centeredRect) {
-        fPos.x = centeredRect.x;
-        fPos.y = centeredRect.y;
-        tPos.x = fPos.x;
-        tPos.y = fPos.y;
-      }
+    } else if (mode === "static") {
+      fPos.x = tPos.x = window.innerWidth  / 2;
+      fPos.y = tPos.y = window.innerHeight / 2;
+      if (!needsDraw && !isTweening()) return;
+
     } else {
-      fBuf[fHead].x = mouse.x;
-      fBuf[fHead].y = mouse.y;
-      var fDelayed  = fBuf[(fHead + 1) % fBufLen];
-      fHead = (fHead + 1) % fBufLen;
+      // Recover from a broken position instead of staying stuck on NaN
+      if (!Number.isFinite(fPos.x) || !Number.isFinite(fPos.y)) { fPos.x = mouse.x; fPos.y = mouse.y; fVelX = fVelY = 0; }
+      if (!Number.isFinite(tPos.x) || !Number.isFinite(tPos.y)) { tPos.x = mouse.x; tPos.y = mouse.y; tVelX = tVelY = 0; }
 
-      var dx = fDelayed.x - fPos.x;
-      var dy = fDelayed.y - fPos.y;
-      fVelX = (fVelX + dx * SPRING_STIFFNESS) * SPRING_DAMPING;
-      fVelY = (fVelY + dy * SPRING_STIFFNESS) * SPRING_DAMPING;
-      fPos.x += fVelX;
-      fPos.y += fVelY;
+      var settled = true;
 
-      tBuf[tHead].x = mouse.x;
-      tBuf[tHead].y = mouse.y;
-      var tDelayed  = tBuf[(tHead + 1) % tBufLen];
-      tHead = (tHead + 1) % tBufLen;
+      if (movementLocked) {
+        if (centeredRect) {
+          fPos.x = centeredRect.x;
+          fPos.y = centeredRect.y;
+          tPos.x = fPos.x;
+          tPos.y = fPos.y;
+        }
+      } else {
+        fBuf[fHead].x = mouse.x;
+        fBuf[fHead].y = mouse.y;
+        var fDelayed  = fBuf[(fHead + 1) % fBufLen];
+        fHead = (fHead + 1) % fBufLen;
 
-      dx = tDelayed.x - tPos.x;
-      dy = tDelayed.y - tPos.y;
-      tVelX = (tVelX + dx * TRAIL_STIFFNESS) * TRAIL_DAMPING;
-      tVelY = (tVelY + dy * TRAIL_STIFFNESS) * TRAIL_DAMPING;
-      tPos.x += tVelX;
-      tPos.y += tVelY;
+        var dx = fDelayed.x - fPos.x;
+        var dy = fDelayed.y - fPos.y;
+        fVelX = (fVelX + dx * SPRING_STIFFNESS) * SPRING_DAMPING;
+        fVelY = (fVelY + dy * SPRING_STIFFNESS) * SPRING_DAMPING;
+        fPos.x += fVelX;
+        fPos.y += fVelY;
+
+        tBuf[tHead].x = mouse.x;
+        tBuf[tHead].y = mouse.y;
+        var tDelayed  = tBuf[(tHead + 1) % tBufLen];
+        tHead = (tHead + 1) % tBufLen;
+
+        dx = tDelayed.x - tPos.x;
+        dy = tDelayed.y - tPos.y;
+        tVelX = (tVelX + dx * TRAIL_STIFFNESS) * TRAIL_DAMPING;
+        tVelY = (tVelY + dy * TRAIL_STIFFNESS) * TRAIL_DAMPING;
+        tPos.x += tVelX;
+        tPos.y += tVelY;
+
+        // Settled = both blobs sit on the cursor and have stopped moving
+        settled = Math.abs(mouse.x - fPos.x) + Math.abs(mouse.y - fPos.y) < 0.2 &&
+                  Math.abs(mouse.x - tPos.x) + Math.abs(mouse.y - tPos.y) < 0.2 &&
+                  Math.abs(fVelX) + Math.abs(fVelY) + Math.abs(tVelX) + Math.abs(tVelY) < 0.05;
+        if (settled) {
+          fPos.x = tPos.x = mouse.x;
+          fPos.y = tPos.y = mouse.y;
+          fVelX = fVelY = tVelX = tVelY = 0;
+        }
+      }
+
+      // Nothing moving or tweening: keep the last frame on screen
+      if (settled && !needsDraw && !isTweening()) return;
     }
 
+    needsDraw = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     try {
@@ -387,6 +497,7 @@ document.addEventListener("DOMContentLoaded", function() {
   for (var t = 0; t < triggers.length; t++) {
     (function(trigger) {
       trigger.addEventListener("mouseenter", function() {
+        if (mode !== "follow") return;  // hover states only on desktop
         var name = trigger.getAttribute("data-follower");
         if (!name || !STATES[name]) return;
 
@@ -429,19 +540,7 @@ document.addEventListener("DOMContentLoaded", function() {
         if (idx === -1) return;
         activeStack.splice(idx, 1);
 
-        var state = STATES[name];
-
-        if (state.centered) {
-          gsap.killTweensOf(fPos);
-          gsap.killTweensOf(tPos);
-          centeredTriggerEl = null;
-          centeredRect = null;
-          fVelX = 0; fVelY = 0;
-          tVelX = 0; tVelY = 0;
-          for (var i = 0; i < fBufLen; i++) { fBuf[i].x = mouse.x; fBuf[i].y = mouse.y; }
-          for (var j = 0; j < tBufLen; j++) { tBuf[j].x = mouse.x; tBuf[j].y = mouse.y; }
-          movementLocked = false;
-        }
+        if (STATES[name].centered) releaseCentered();
 
         var returnTo = resolveState();
         if (returnTo) {
