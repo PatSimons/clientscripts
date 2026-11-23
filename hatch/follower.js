@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", function() {
 
   // ═══════════════════════════════════════════════════════════════
-  // 1. MOVEMENT CONTROLS
+  // 1. MOVEMENT CONTROLS PS
   // ═══════════════════════════════════════════════════════════════
 
   const SPRING_STIFFNESS = 0.25;  // pull force toward target per frame (higher = snappier)
@@ -102,8 +102,9 @@ document.addEventListener("DOMContentLoaded", function() {
 
   const AMBIENT_QUERY = "(max-width: 991px)";
   const AMBIENT_LOOP  = 60;    // seconds per seamless loop (higher = slower drift)
-  const AMBIENT_RANGE = 0.25;  // how far it drifts, as a fraction of the viewport
+  const AMBIENT_RANGE = 0.3;   // how far it drifts, as a fraction of the viewport
   const AMBIENT_TRAIL = 8;     // seconds the trail runs behind on the same path
+  const AMBIENT_SIZE  = 0.9;   // follower radius as a fraction of the viewport width (trail is 1.5×)
 
   // ═══════════════════════════════════════════════════════════════
   // 7. STATE DEFINITIONS
@@ -415,9 +416,12 @@ document.addEventListener("DOMContentLoaded", function() {
       var t = gsap.ticker.time;
       ambientPos(t, fPos);
       ambientPos(t - AMBIENT_TRAIL, tPos);
-      var m = 0.5 - 0.5 * Math.cos((t / AMBIENT_LOOP) * Math.PI * 4);  // two colour cycles per loop
-      mixColor(fLive, m);
-      mixColor(tLive, 1 - m);
+      var c = (t / AMBIENT_LOOP) * Math.PI * 4;  // two colour cycles per loop
+      mixColor(fLive, 0.5 - 0.5 * Math.cos(c));
+      mixColor(tLive, 0.5 - 0.5 * Math.cos(c - 1));  // trail a little behind
+      // Size to the screen so the drift reads on small viewports
+      fLive.scale = window.innerWidth * AMBIENT_SIZE / BASE_RADIUS;
+      tLive.scale = fLive.scale * 1.5;
 
     } else if (mode === "static") {
       fPos.x = tPos.x = window.innerWidth  / 2;
