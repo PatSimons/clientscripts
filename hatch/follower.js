@@ -101,7 +101,8 @@ document.addEventListener("DOMContentLoaded", function() {
   // ═══════════════════════════════════════════════════════════════
 
   const AMBIENT_QUERY = "(max-width: 991px)";
-  const AMBIENT_LOOP  = 60;    // seconds per seamless loop (higher = slower drift)
+  const AMBIENT_LOOP  = 60;    // seconds per seamless loop (colour and size pulse follow this)
+  const AMBIENT_DRIFT = 2;     // position speed: path repeats this many times per loop (whole numbers only, keeps it seamless)
   const AMBIENT_RANGE = 0.3;   // how far it drifts, as a fraction of the viewport
   const AMBIENT_TRAIL = 8;     // seconds the trail runs behind on the same path
 
@@ -347,7 +348,7 @@ document.addEventListener("DOMContentLoaded", function() {
   var seed = [0, 0, 0, 0].map(function() { return Math.random() * Math.PI * 2; });
 
   function ambientPos(t, out) {
-    var a = (t / AMBIENT_LOOP) * Math.PI * 2;
+    var a = (t / AMBIENT_LOOP) * Math.PI * 2 * AMBIENT_DRIFT;
     var w = window.innerWidth, h = window.innerHeight;
     out.x = w / 2 + w * AMBIENT_RANGE * (0.6 * Math.sin(a + seed[0]) + 0.4 * Math.sin(2 * a + seed[1]));
     out.y = h / 2 + h * AMBIENT_RANGE * (0.6 * Math.sin(a + seed[2]) + 0.4 * Math.sin(3 * a + seed[3]));
@@ -432,7 +433,7 @@ document.addEventListener("DOMContentLoaded", function() {
       if (frame++ % 2) return;  // ~30fps is plenty for a slow drift
       var t = gsap.ticker.time;
       ambientPos(t, fPos);
-      ambientPos(t - AMBIENT_TRAIL, tPos);
+      ambientPos(t - AMBIENT_TRAIL / AMBIENT_DRIFT, tPos);  // same spacing at any speed
       var a = (t / AMBIENT_LOOP) * Math.PI * 2;
       mixColor(fLive, 0.5 - 0.5 * Math.cos(2 * a));      // two colour cycles per loop
       mixColor(tLive, 0.5 - 0.5 * Math.cos(2 * a - 1));  // trail a little behind
