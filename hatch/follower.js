@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", function() {
 
   // ═══════════════════════════════════════════════════════════════
-  // 1. MOVEMENT CONTROLS PS
+  // 1. MOVEMENT CONTROLS
   // ═══════════════════════════════════════════════════════════════
 
   const SPRING_STIFFNESS = 0.25;  // pull force toward target per frame (higher = snappier)
@@ -104,7 +104,14 @@ document.addEventListener("DOMContentLoaded", function() {
   const AMBIENT_LOOP  = 60;    // seconds per seamless loop (higher = slower drift)
   const AMBIENT_RANGE = 0.3;   // how far it drifts, as a fraction of the viewport
   const AMBIENT_TRAIL = 8;     // seconds the trail runs behind on the same path
-  const AMBIENT_SIZE  = 0.9;   // follower radius as a fraction of the viewport width (trail is 1.5×)
+
+  //  Dedicated mobile blobs (colour is cycled, so none is set here).
+  //  size  → radius as a fraction of the viewport width
+  //  pulse → how much size swells and shrinks over one loop (± fraction)
+  const AMBIENT_BLOBS = {
+    follower: { midA: 0.25, innerStop: 0.2, midStop: 0.5, size: 0.8, pulse: 0.15, opacity: 0.5  },
+    trail:    { midA: 0.2,  innerStop: 0.1, midStop: 0.5, size: 1.3, pulse: 0.1,  opacity: 0.35 },
+  };
 
   // ═══════════════════════════════════════════════════════════════
   // 7. STATE DEFINITIONS
@@ -393,10 +400,20 @@ document.addEventListener("DOMContentLoaded", function() {
       // Switching after load (resize/rotate): drop hover states, back to default look
       activeStack.length = 0;
       releaseCentered();
-      transitionTo(DEFAULT_STATE);
+      if (next !== "ambient") transitionTo(DEFAULT_STATE);
     }
     mode = next;
     needsDraw = true;
+    if (mode === "ambient") {
+      // Swap to the mobile blobs and fade them in (replaces the desktop intro)
+      killIntro();
+      gsap.killTweensOf([fLive, tLive]);
+      [[fLive, AMBIENT_BLOBS.follower], [tLive, AMBIENT_BLOBS.trail]].forEach(function(p) {
+        var b = p[1];
+        Object.assign(p[0], { midA: b.midA, innerStop: b.innerStop, midStop: b.midStop });
+        gsap.to(p[0], { opacity: b.opacity, duration: 2, ease: "power2.out", delay: 0.7, overwrite: "auto" });
+      });
+    }
   }
   setMode();
   smallMQ.addEventListener("change", setMode);
@@ -416,12 +433,13 @@ document.addEventListener("DOMContentLoaded", function() {
       var t = gsap.ticker.time;
       ambientPos(t, fPos);
       ambientPos(t - AMBIENT_TRAIL, tPos);
-      var c = (t / AMBIENT_LOOP) * Math.PI * 4;  // two colour cycles per loop
-      mixColor(fLive, 0.5 - 0.5 * Math.cos(c));
-      mixColor(tLive, 0.5 - 0.5 * Math.cos(c - 1));  // trail a little behind
-      // Size to the screen so the drift reads on small viewports
-      fLive.scale = window.innerWidth * AMBIENT_SIZE / BASE_RADIUS;
-      tLive.scale = fLive.scale * 1.5;
+      var a = (t / AMBIENT_LOOP) * Math.PI * 2;
+      mixColor(fLive, 0.5 - 0.5 * Math.cos(2 * a));      // two colour cycles per loop
+      mixColor(tLive, 0.5 - 0.5 * Math.cos(2 * a - 1));  // trail a little behind
+      // Slow size pulse on the same loop; trail swells while the follower shrinks
+      var fb = AMBIENT_BLOBS.follower, tb = AMBIENT_BLOBS.trail;
+      fLive.scale = window.innerWidth * fb.size * (1 + fb.pulse * Math.sin(a)) / BASE_RADIUS;
+      tLive.scale = window.innerWidth * tb.size * (1 - tb.pulse * Math.sin(a)) / BASE_RADIUS;
 
     } else if (mode === "static") {
       fPos.x = tPos.x = window.innerWidth  / 2;
