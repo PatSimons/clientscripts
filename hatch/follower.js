@@ -111,15 +111,15 @@ document.addEventListener("DOMContentLoaded", function() {
   const AMBIENT_SWING  = 3;    // in-and-out swings per loop
   const AMBIENT_COLORS = 4;    // primary → secondary → accent cycles per loop
   const AMBIENT_PULSES = 2;    // size swell cycles per loop
-  const AMBIENT_REACH  = [0.3, 1];  // distance from centre: 0 = centre, 1 = centre touches the edge
+  const AMBIENT_REACH  = [0.4, 1];  // distance from centre: 0 = centre, 1 = centre touches the edge
  
   //  Dedicated mobile blobs (colour is cycled, so none is set here).
   //  size  → radius as a fraction of the viewport width
   //  pulse → how much size swells and shrinks (± fraction)
   const AMBIENT_BLOBS = [
-    { midA: 0.25, innerStop: 0.2, midStop: 0.5, size: 0.7, pulse: 0.15, opacity: 0.5  },
-    { midA: 0.25, innerStop: 0.2, midStop: 0.5, size: 0.6, pulse: 0.15, opacity: 0.45 },
-    { midA: 0.2,  innerStop: 0.1, midStop: 0.5, size: 0.8, pulse: 0.1,  opacity: 0.4  },
+    { midA: 0.25, innerStop: 0.2, midStop: 0.5, size: 1.7, pulse: 0.15, opacity: 0.5  },
+    { midA: 0.25, innerStop: 0.2, midStop: 0.5, size: 1.6, pulse: 0.15, opacity: 0.45 },
+    { midA: 0.2,  innerStop: 0.1, midStop: 0.5, size: 1.8, pulse: 0.1,  opacity: 0.4  },
   ];
  
   // ═══════════════════════════════════════════════════════════════
