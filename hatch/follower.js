@@ -103,8 +103,10 @@ document.addEventListener("DOMContentLoaded", function() {
 
   const TOUCH_QUERY = "(max-width: 991px)";
   const TOUCH_STATE = "focus";  // look while touching (any non-full-screen state)
-  const TOUCH_SIZE  = 0.6;      // largest blob radius as a fraction of the screen width
-  const TOUCH_IN    = { duration: 0.4, ease: "power2.out" };
+  const TOUCH_SIZE  = 0.48;     // largest blob radius as a fraction of the screen width
+  const TOUCH_IN    = { duration: 0.4, ease: "power2.out" };          // colour/opacity fade in
+  const TOUCH_GROW  = { duration: 0.7, ease: "back.out(1.7)" };       // first touch: scale in from 0
+  const TOUCH_DPR   = 1;        // canvas resolution on touch (soft blobs look the same, far less work)
   const TOUCH_OUT   = { duration: 0.8, ease: "power2.inOut" };
 
   //  Velocity (touch only). Speeds are in pixels per frame.
@@ -215,8 +217,11 @@ document.addEventListener("DOMContentLoaded", function() {
   var ctx = canvas.getContext("2d");
   var dpr = 1;
 
+  var lastW = 0, lastH = 0;
   function resizeCanvas() {
+    lastW = window.innerWidth; lastH = window.innerHeight;
     dpr = window.devicePixelRatio || 1;
+    if (mode === "touch") dpr = Math.min(dpr, TOUCH_DPR);
     canvas.width  = window.innerWidth  * dpr;
     canvas.height = window.innerHeight * dpr;
     needsDraw = true;
@@ -227,6 +232,8 @@ document.addEventListener("DOMContentLoaded", function() {
   window.addEventListener("resize", function() {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function() {
+      // Mobile address bar showing/hiding while scrolling: keep the canvas as is
+      if (mode === "touch" && window.innerWidth === lastW && Math.abs(window.innerHeight - lastH) < 160) return;
       resizeCanvas();
       updateCenteredRect();
       // Recalculate the fill size if a full-screen state is active
@@ -354,11 +361,18 @@ document.addEventListener("DOMContentLoaded", function() {
   // ── Touch ─────────────────────────────────────────────────────
 
   // Same look as TOUCH_STATE, resized to the screen
-  function touchShow() {
+  // Same look as TOUCH_STATE, resized to the screen. grow = scale in from 0.
+  function touchShow(grow) {
     var st = STATES[TOUCH_STATE], f = st.follower, t = st.trail || f;
     var k  = window.innerWidth * TOUCH_SIZE / (BASE_RADIUS * Math.max(f.scale, t.scale));
-    gsap.to(fLive, Object.assign({}, f, { scale: f.scale * k }, TOUCH_IN, { overwrite: "auto" }));
-    gsap.to(tLive, Object.assign({}, t, { scale: t.scale * k }, TOUCH_IN, { overwrite: "auto" }));
+    [[fLive, f], [tLive, t]].forEach(function(p) {
+      var live = p[0], look = Object.assign({}, p[1]);
+      var size = look.scale * k;
+      delete look.scale;
+      if (grow) live.scale = 0;
+      gsap.to(live, Object.assign(look, TOUCH_IN, { overwrite: "auto" }));
+      gsap.to(live, Object.assign({ scale: size }, grow ? TOUCH_GROW : TOUCH_IN, { overwrite: "auto" }));
+    });
   }
 
   var fDef  = { s: 0, w: 0, a: 0 }, tDef = { s: 0, w: 0, a: 0 };  // stretch/swell per blob
@@ -390,13 +404,15 @@ document.addEventListener("DOMContentLoaded", function() {
     if (mode !== "touch") return;
     fling.on = false; fling.x = fling.y = 0; fling.t = 0;
     touchPoint(e);
-    // Fully faded out: appear right under the finger instead of flying in
-    if (fLive.opacity < 0.01 && tLive.opacity < 0.01) {
+    // Fully faded out: appear right under the finger and scale in from 0
+    var grow = fLive.opacity < 0.01 && tLive.opacity < 0.01;
+    if (grow) {
       releaseCentered();
       fPos.x = tPos.x = mouse.x;
       fPos.y = tPos.y = mouse.y;
+      fDef.s = fDef.w = tDef.s = tDef.w = 0;
     }
-    touchShow();
+    touchShow(grow);
   }, { passive: true });
 
   window.addEventListener("touchmove", function(e) {
@@ -456,7 +472,7 @@ document.addEventListener("DOMContentLoaded", function() {
       if (next !== "touch") transitionTo(DEFAULT_STATE);
     }
     mode = next;
-    needsDraw = true;
+    resizeCanvas();  // resolution depends on the mode
     if (mode === "touch") {
       // Hidden until a finger touches the screen
       killIntro();
@@ -602,6 +618,7 @@ document.addEventListener("DOMContentLoaded", function() {
       });
 
       trigger.addEventListener("mouseleave", function() {
+        if (mode !== "follow") return;
         var name = trigger.getAttribute("data-follower");
         if (!name) return;
 
